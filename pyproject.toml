@@ -1,0 +1,25 @@
+[project]
+name = "news-mcp"
+version = "0.1.0"
+description = "mcp news server"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+ "fastmcp>=2.2.4",
+ "feedparser>=6.0.11",
+ "load-dotenv>=0.1.0",
+ "mcp>=1.6.0",
+ "openai>=1.76.0",
+ "requests>=2.32.3",
+ "trafilatura>=2.0.0",
+]
+[[project.authors]]
+name = "elucia"
+email = "me@elucia.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+news-mcp = "news_mcp:main"
