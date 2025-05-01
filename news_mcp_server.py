@@ -5,8 +5,9 @@ FastMCP server that exposes the harvested articles to LLM agents
 and offers on-demand refreshing & summarisation.
 """
 
-import os, logging
-from datetime import datetime, timezone
+import os
+import logging
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 
 import openai
@@ -67,8 +68,10 @@ Cite with footnotes like [1], [2]. Start with a short headline.
     summary += "\n\nSources\n" + "\n".join(sources)
     return summary
 
-def summarize_unsummarized(category: Optional[str] = None,
-                           limit: int = MAX_ARTICLES_PER_SUMMARY) -> str:
+def summarize_unsummarized(
+    category: Optional[str] = None,
+    limit: int = MAX_ARTICLES_PER_SUMMARY
+) -> str:
     with get_connection() as conn, conn.cursor() as cur:
         sql = """
         SELECT id,title,link,source,content
@@ -109,13 +112,13 @@ mcp = FastMCP("News Feeds")
 #     return f"Fetched feeds; inserted {inserted} new items."
 
 @mcp.tool(
-    annotations={
-        "title": "Summarize News Articles",
-        "readOnlyHint": True,
-        "openWorldHint": False
-    }
+    # annotations={
+    #     "title": "Summarize News Articles",
+    #     "readOnlyHint": True,
+    #     "openWorldHint": False
+    # }
 )
-def summarize_news(ctx: Context, category: str = "", limit: int = 20) -> List[Dict]:
+def summarize_news(ctx: Context, category: str = "", hours: int = 24, limit: int = 40) -> List[Dict]:
     """
         Returns raw articles so the caller can summarise them (LLM-side).
         
@@ -125,6 +128,7 @@ def summarize_news(ctx: Context, category: str = "", limit: int = 20) -> List[Di
                 tech, data_science, llm_tools, cybersecurity, linux,
                 audio_dsp, startups, news, science, research, policy.
                 Defaults to all categories.
+            hours: Number of hours to look back for articles.
             limit: Maximum number of articles to return (default 20,
                 capped by MAX_ARTICLES_PER_SUMMARY).
 
@@ -166,6 +170,8 @@ def summarize_news(ctx: Context, category: str = "", limit: int = 20) -> List[Di
         `news 2 hours machine learning`
 
     """
+    current_time = datetime.now(timezone.utc)
+    cutoff_time = current_time - timedelta(hours=hours)
     cat = category or None
     lim = min(limit, MAX_ARTICLES_PER_SUMMARY)
     with get_connection() as conn, conn.cursor() as cur:
@@ -173,20 +179,21 @@ def summarize_news(ctx: Context, category: str = "", limit: int = 20) -> List[Di
             cur.execute("""
             SELECT id,title,link,published::text,source,content
             FROM entries
-            WHERE category=%s
-            ORDER BY published DESC NULLS LAST
-            LIMIT %s;""", (cat, lim))
+            WHERE category=%s AND uploaded_at >= %s
+            ORDER BY published DESC NULLS LAST, uploaded_at DESC NULLS LAST
+            LIMIT %s;""", (cat, cutoff_time, lim))
         else:
             cur.execute("""
             SELECT id,title,link,published::text,source,content
             FROM entries
-            ORDER BY published DESC NULLS LAST
-            LIMIT %s;""", (lim,))
+            WHERE category='news' AND uploaded_at >= %s
+            ORDER BY published DESC NULLS LAST, uploaded_at DESC NULLS LAST
+            LIMIT %s;""", (cutoff_time, lim))
         rows = cur.fetchall()
 
     return [
         dict(id=r[0], title=r[1], link=r[2], published=r[3],
-             source=r[4], content=r[5])
+            source=r[4], content=r[5])
         for r in rows
     ]
 
