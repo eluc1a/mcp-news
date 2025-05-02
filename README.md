@@ -2,6 +2,10 @@
 
 mcp news server
 
+<a href="https://glama.ai/mcp/servers/@eluc1a/mcp-news">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@eluc1a/mcp-news/badge" alt="News Server MCP server" />
+</a>
+
 ## Components
 
 ### Resources
