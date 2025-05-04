@@ -124,7 +124,7 @@ mcp = FastMCP("News Feeds")
 #     inserted = fetch_and_store()
 #     return f"Fetched feeds; inserted {inserted} new items."
 
-def get_articles_with_pagination(category: Optional[str], cutoff_time: datetime, limit: int) -> List[Dict]:
+def get_articles_with_pagination(category: Optional[str | List[str]], cutoff_time: datetime, limit: int) -> List[Dict]:
     """
     Get articles with pagination to support retrieving large numbers of articles.
     This function is internal and not exposed as an MCP tool.
@@ -139,15 +139,28 @@ def get_articles_with_pagination(category: Optional[str], cutoff_time: datetime,
         while len(all_articles) < limit:
             with conn.cursor() as cur:
                 if category:
-                    query = """
-                    SELECT id,title,link,published::text,source,content
-                    FROM entries
-                    WHERE category=%s AND uploaded_at >= %s
-                    ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
-                    LIMIT %s OFFSET %s;"""
-                    
-                    print(f"*** EXECUTING QUERY: OFFSET={offset}, LIMIT={batch_size}")
-                    cur.execute(query, (category, cutoff_time, batch_size, offset))
+                    if isinstance(category, list):
+                        # Handle list of categories
+                        query = """
+                        SELECT id,title,link,published::text,source,content
+                        FROM entries
+                        WHERE category = ANY(%s) AND uploaded_at >= %s
+                        ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
+                        LIMIT %s OFFSET %s;"""
+                        
+                        print(f"*** EXECUTING QUERY WITH CATEGORIES: {category}, OFFSET={offset}, LIMIT={batch_size}")
+                        cur.execute(query, (category, cutoff_time, batch_size, offset))
+                    else:
+                        # Handle single category as string
+                        query = """
+                        SELECT id,title,link,published::text,source,content
+                        FROM entries
+                        WHERE category=%s AND uploaded_at >= %s
+                        ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
+                        LIMIT %s OFFSET %s;"""
+                        
+                        print(f"*** EXECUTING QUERY: OFFSET={offset}, LIMIT={batch_size}")
+                        cur.execute(query, (category, cutoff_time, batch_size, offset))
                 else:
                     query = """
                     SELECT id,title,link,published::text,source,content
@@ -183,16 +196,19 @@ def get_articles_with_pagination(category: Optional[str], cutoff_time: datetime,
     return all_articles[:limit]  # Respect the original limit
 
 @mcp.tool()
-def summarize_news(ctx: Context, category: str = "", hours: int = 24, limit: int = 10_000, offset: int = 0) -> Dict:
+def summarize_news(ctx: Context, category: str | List[str] = "", hours: int = 24, limit: int = 10_000, offset: int = 0) -> Dict:
     """
         Returns raw articles so the caller can summarise them (LLM-side).
         
         Args:
             ctx: MCP context providing database connection and logging.
-            category: Optional category filter. One of:
-                tech, data_science, llm_tools, cybersecurity, linux,
-                audio_dsp, startups, news, science, research, policy.
-                Defaults to all categories.
+            category: Category filter - either a single category string or a list of categories.
+                    Available categories include:
+                    international_news, research, data_science, regional_international_news, 
+                    business_finance_news, us_local_news, business_tech, tech, policy, linux, 
+                    science, cybersecurity, startups, business, us_national_news, 
+                    investigative_journalism, llm_tools
+                Defaults to us_national_news if empty.
             hours: Number of hours to look back for articles.
             limit: Maximum number of articles to return.
             offset: Starting position for pagination (default 0).
@@ -202,7 +218,11 @@ def summarize_news(ctx: Context, category: str = "", hours: int = 24, limit: int
               - articles: list of article dicts (each has id, title, link, published, source, content)
               - meta: metadata about the query (total_count, limit, offset, has_more)
     """
-    logger.info(f"summarize_news called with category='{category}', hours={hours}, limit={limit}, offset={offset}")
+    if isinstance(category, list):
+        category_str = ', '.join(category)
+        logger.info(f"summarize_news called with categories=[{category_str}], hours={hours}, limit={limit}, offset={offset}")
+    else:
+        logger.info(f"summarize_news called with category='{category}', hours={hours}, limit={limit}, offset={offset}")
     
     current_time = datetime.now(timezone.utc)
     if hours >= 24:
