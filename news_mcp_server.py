@@ -49,151 +49,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("news_mcp")
 
-# ────────────────────────  summarisation  ─────────────────────────── #
-def _summarize_articles(records: List[dict]) -> str:
-    articles_md, sources = [], []
-    for idx, rec in enumerate(records, 1):
-        articles_md.append(
-            f"### Article {idx}\n"
-            f"Title: {rec['title']}\n"
-            f"Source: {rec['source']} ({rec['link']})\n\n"
-            f"{rec['content']}\n"
-        )
-        sources.append(f"[{idx}] {rec['title']} – {rec['link']}")
-    articles_text = '\n'.join(articles_md)
-    prompt = f"""
-You are a professional technology analyst.
-Write a cohesive {SUMMARY_WORD_TARGET}-word briefing combining the articles below,
-grouping by theme. Cover only these domains: {', '.join(KEYWORD_FILTER)}.
-Cite with footnotes like [1], [2]. Start with a short headline.
 
-=== ARTICLES ===
-{articles_text}
-=== END ===
-"""
-    resp = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=3000,
-    )
-    summary = resp.choices[0].message.content.strip()
-    summary += "\n\nSources\n" + "\n".join(sources)
-    return summary
-
-def summarize_unsummarized(
-    category: Optional[str] = None,
-    limit: int = MAX_ARTICLES_PER_SUMMARY
-) -> str:
-    with get_connection() as conn, conn.cursor() as cur:
-        sql = """
-        SELECT id,title,link,source,content
-        FROM entries
-        WHERE summarized_at IS NULL
-        """
-        params: list = []
-        if category:
-            sql += "AND category=%s"
-            params.append(category)
-        sql += "ORDER BY published DESC NULLS LAST LIMIT %s"
-        params.append(limit)
-        cur.execute(sql, tuple(params))
-        rows = cur.fetchall()
-
-    if not rows:
-        return "No new articles to summarize."
-
-    records = [dict(id=r[0], title=r[1], link=r[2], source=r[3], content=r[4])
-               for r in rows]
-    summary = _summarize_articles(records)
-    ids = [r["id"] for r in records]
-
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute("UPDATE entries SET summarized_at=%s WHERE id=ANY(%s);",
-                    (datetime.now(timezone.utc), ids))
-        conn.commit()
-
-    return summary
-
-# ────────────────────────  Fast-MCP API  ──────────────────────────── #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 mcp = FastMCP("News Feeds")
 
-# @mcp.tool()
-# def refresh_feeds(ctx: Context) -> str:
-#     """Manually trigger the harvester (rarely needed if you schedule it)."""
-#     inserted = fetch_and_store()
-#     return f"Fetched feeds; inserted {inserted} new items."
-
-def get_articles_with_pagination(category: Optional[str | List[str]], cutoff_time: datetime, limit: int) -> List[Dict]:
-    """
-    Get articles with pagination to support retrieving large numbers of articles.
-    This function is internal and not exposed as an MCP tool.
-    """
-    print(f"*** RETRIEVING ARTICLES: category={category}, cutoff={cutoff_time}, limit={limit}")
-    
-    all_articles = []
-    offset = 0
-    batch_size = 100  # Each database query fetches 100 records
-    
-    with get_connection() as conn:
-        while len(all_articles) < limit:
-            with conn.cursor() as cur:
-                if category:
-                    if isinstance(category, list):
-                        # Handle list of categories
-                        query = """
-                        SELECT id,title,link,published::text,source,content
-                        FROM entries
-                        WHERE category = ANY(%s) AND uploaded_at >= %s
-                        ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
-                        LIMIT %s OFFSET %s;"""
-                        
-                        print(f"*** EXECUTING QUERY WITH CATEGORIES: {category}, OFFSET={offset}, LIMIT={batch_size}")
-                        cur.execute(query, (category, cutoff_time, batch_size, offset))
-                    else:
-                        # Handle single category as string
-                        query = """
-                        SELECT id,title,link,published::text,source,content
-                        FROM entries
-                        WHERE category=%s AND uploaded_at >= %s
-                        ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
-                        LIMIT %s OFFSET %s;"""
-                        
-                        print(f"*** EXECUTING QUERY: OFFSET={offset}, LIMIT={batch_size}")
-                        cur.execute(query, (category, cutoff_time, batch_size, offset))
-                else:
-                    query = """
-                    SELECT id,title,link,published::text,source,content
-                    FROM entries
-                    WHERE category='news' AND uploaded_at >= %s
-                    ORDER BY uploaded_at DESC NULLS LAST, published DESC NULLS LAST
-                    LIMIT %s OFFSET %s;"""
-                    
-                    print(f"*** EXECUTING QUERY: OFFSET={offset}, LIMIT={batch_size}")
-                    cur.execute(query, (cutoff_time, batch_size, offset))
-                
-                rows = cur.fetchall()
-                print(f"*** FETCHED {len(rows)} ARTICLES")
-                
-                if not rows:
-                    # No more results
-                    break
-                
-                articles = [
-                    dict(id=r[0], title=r[1], link=r[2], published=r[3],
-                        source=r[4], content=r[5])
-                    for r in rows
-                ]
-                
-                all_articles.extend(articles)
-                offset += batch_size
-                
-                if len(rows) < batch_size:
-                    # Got fewer rows than requested, meaning we've reached the end
-                    break
-    
-    print(f"*** TOTAL ARTICLES FOUND: {len(all_articles)}")
-    return all_articles[:limit]  # Respect the original limit
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~  __    __     ______     ______  ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~ /\ "-./  \   /\  ___\   /\  == \ ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~ \ \ \-./\ \  \ \ \____  \ \  _-/ ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~  \ \_\ \ \_\  \ \_____\  \ \_\   ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~   \/_/  \/_/   \/_____/   \/_/   ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 @mcp.tool()
 def summarize_news(ctx: Context, category: str | List[str] = "", hours: int = 24, limit: int = 10_000, offset: int = 0) -> Dict:
@@ -215,8 +81,8 @@ def summarize_news(ctx: Context, category: str | List[str] = "", hours: int = 24
 
         Returns:
             A dict with:
-              - articles: list of article dicts (each has id, title, link, published, source, content)
-              - meta: metadata about the query (total_count, limit, offset, has_more)
+                - articles: list of article dicts (each has id, title, link, published, source, content)
+                - meta: metadata about the query (total_count, limit, offset, has_more)
     """
     if isinstance(category, list):
         category_str = ', '.join(category)
