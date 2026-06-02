@@ -229,3 +229,11 @@ FEED_SOURCES.extend([
     {"name": "La Nación (Argentina)",         "url": "https://www.lanacion.com.ar/rss/lo-ultimo/",                                          "category": "regional_international_news"},
     {"name": "El Universal (Mexico)",         "url": "https://www.eluniversal.com.mx/rss/",                                                 "category": "regional_international_news"},
 ])
+
+FEED_SOURCES.extend([
+    {"name": "Democracy Now!",               "url": "https://www.democracynow.org/democracynow.rss",                                        "category": "investigative_journalism"},
+    {"name": "404 Media",                    "url": "https://www.404media.co/rss/",                                                         "category": "tech"},
+    {"name": "Wired",                        "url": "https://www.wired.com/feed/rss",                                                       "category": "tech"},
+    {"name": "Mondoweiss",                   "url": "https://mondoweiss.net/feed/",                                                         "category": "international_news"},
+    {"name": "Drop Site News",               "url": "https://www.dropsitenews.com/feed",                                                    "category": "investigative_journalism"},
+])

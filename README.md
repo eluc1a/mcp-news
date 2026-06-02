@@ -2,6 +2,10 @@
 
 mcp news server
 
+## IMPORTANT
+
+* Do not begin coding unless the user asks you to. If the user is asking a question about the code, answer the question - do not write or modify code unless explicitly asked.
+
 ## Components
 
 ### Resources
