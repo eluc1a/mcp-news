@@ -140,7 +140,6 @@ def fetch_and_store() -> int:
         except Exception as exc:
             logging.warning("[%s] request failed: %s", src["name"], exc)
             entries = []
-        entries = feed.entries or []
         source_new = 0
         new_rows: List[tuple] = []
 

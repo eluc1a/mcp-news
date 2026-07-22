@@ -11,3 +11,10 @@ wheels/
 
 # Environment variables
 .env
+
+# MCP client config (may hold plaintext keys)
+.mcp.json
+
+# Logs / editor
+*.log
+.vscode/
