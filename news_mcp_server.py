@@ -311,6 +311,10 @@ def initialize_resources() -> None:
     logging.info("News MCP server initialised – waiting for client calls.")
     print("News MCP server initialised – waiting for client calls.")
 
+# ASGI entrypoint for systemd/uvicorn (news-mcp.service): the FastMCP
+# instance itself is not an ASGI app, so expose its SSE app.
+app = mcp.sse_app()
+
 if __name__ == "__main__":
     initialize_resources()
     # SSE transport keeps things simple for HTTP clients such as Cursor/TypingMind
